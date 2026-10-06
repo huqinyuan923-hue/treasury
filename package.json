@@ -1,0 +1,28 @@
+{
+  "name": "treasury",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Treasury 书签云收藏 — 个人书签收藏夹：自动抓取标题、标签、全文搜索",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0",
+    "dotenv": "^18.0.5",
+    "drizzle-orm": "^0.44.0",
+    "jose": "^6.0.0",
+    "next": "^15.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "drizzle-kit": "^0.31.0",
+    "typescript": "^5.8.0"
+  }
+}
