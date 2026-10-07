@@ -114,6 +114,11 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
 }
 .link-card:hover .lc-del { opacity: 1; }
 .link-card .lc-del:hover { color: var(--danger); background: rgb(255 123 142 / 0.1); }
+/* 触屏设备没有 hover:删除按钮常显,并给标题留出按钮位置 */
+@media (hover: none), (max-width: 640px) {
+  .link-card { padding-right: 72px; }
+  .link-card .lc-del { opacity: 0.75; }
+}
 
 .empty { text-align: center; color: var(--fg-muted); padding: 48px 0; }
 .count-note { color: var(--fg-muted); font-size: 0.85rem; }
