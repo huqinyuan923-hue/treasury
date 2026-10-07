@@ -97,28 +97,37 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
   position: relative;
 }
 .link-card:hover { border-color: rgb(139 123 255 / 0.5); transform: translateY(-1px); }
-.link-card .lc-title { font-weight: 700; color: var(--fg); text-decoration: none; font-size: 1.02rem; }
+.link-card .lc-title { font-weight: 700; color: var(--fg); text-decoration: none; font-size: 1.02rem; display: inline-flex; align-items: center; gap: 6px; }
 .link-card .lc-title:hover { color: var(--accent-2); }
+.link-card .lc-fav { border-radius: 3px; flex: none; }
 .link-card .lc-host { color: var(--fg-muted); font-size: 0.8rem; margin-left: 8px; }
 .link-card .lc-desc { color: var(--fg-muted); font-size: 0.88rem; margin: 4px 0 8px; }
 .link-card .lc-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .link-card .lc-tags span {
   font-size: 0.78rem; color: #c9c2ff;
   background: rgb(139 123 255 / 0.16); padding: 1px 10px; border-radius: 999px;
+  cursor: pointer;
 }
-.link-card .lc-del {
-  position: absolute; top: 10px; right: 10px;
+.link-card .lc-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; }
+.link-card .lc-del,
+.link-card .lc-edit {
   border: 0; background: transparent; color: var(--fg-muted);
   font-size: 0.85rem; padding: 4px 8px; border-radius: 8px; opacity: 0;
   transition: opacity 0.15s ease;
 }
-.link-card:hover .lc-del { opacity: 1; }
+.link-card:hover .lc-del, .link-card:hover .lc-edit { opacity: 1; }
 .link-card .lc-del:hover { color: var(--danger); background: rgb(255 123 142 / 0.1); }
-/* 触屏设备没有 hover:删除按钮常显,并给标题留出按钮位置 */
+/* 触屏设备没有 hover:操作按钮常显,并给标题留出按钮位置 */
 @media (hover: none), (max-width: 640px) {
-  .link-card { padding-right: 72px; }
-  .link-card .lc-del { opacity: 0.75; }
+  .link-card { padding-right: 118px; }
+  .link-card .lc-del, .link-card .lc-edit { opacity: 0.75; }
 }
+
+.link-card .lc-edit:hover { color: var(--accent-2); background: var(--accent-soft); }
+
+.edit-form { display: flex; flex-direction: column; gap: 8px; }
+.edit-form input { margin: 0; font-size: 0.9rem; }
+.edit-form .btn-row { margin: 0; }
 
 .empty { text-align: center; color: var(--fg-muted); padding: 48px 0; }
 .count-note { color: var(--fg-muted); font-size: 0.85rem; }
@@ -126,5 +135,5 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
 @media (max-width: 640px) {
   .add-row { flex-direction: column; }
   .add-row .btn { width: 100%; }
-  .link-card .lc-del { opacity: 1; }
+  .link-card .lc-del, .link-card .lc-edit { opacity: 1; }
 }

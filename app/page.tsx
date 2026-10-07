@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Link as LinkRow } from "@/db/schema";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export default function Dashboard() {
   const [links, setLinks] = useState<LinkRow[] | null>(null);
@@ -13,6 +13,11 @@ export default function Dashboard() {
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ title: "", description: "", tags: "" });
+  const [favBroken, setFavBroken] = useState<Set<number>>(new Set());
+  const importPickRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/links");
@@ -68,6 +73,92 @@ export default function Dashboard() {
       setLinks((ls) => (ls ? ls.filter((l) => l.id !== id) : ls));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  function startEdit(l: LinkRow) {
+    setEditingId(l.id);
+    setEditForm({ title: l.title, description: l.description, tags: l.tags.join(" ") });
+  }
+
+  async function saveEdit(id: number) {
+    try {
+      const res = await fetch("/api/links?id=" + id, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editForm.title,
+          description: editForm.description,
+          tags: editForm.tags.trim() ? editForm.tags.trim().split(/[\s,，]+/) : [],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg({ text: "✗ " + (data.error || "保存失败"), ok: false });
+        return;
+      }
+      setLinks((ls) => (ls ? ls.map((l) => (l.id === id ? data.link : l)) : ls));
+      setEditingId(null);
+      setMsg({ text: "✓ 已保存修改", ok: true });
+    } catch {
+      setMsg({ text: "✗ 网络异常", ok: false });
+    }
+  }
+
+  /** 解析浏览器导出的 Netscape 书签 HTML → 条目列表（文件夹层级转为标签） */
+  async function handleImport(file: File) {
+    if (!file) return;
+    setImporting(true);
+    setMsg(null);
+    try {
+      const doc = new DOMParser().parseFromString(await file.text(), "text/html");
+      const items: { url: string; title: string; tags: string[] }[] = [];
+      outer: for (const a of doc.querySelectorAll("a")) {
+        const url = a.getAttribute("href") || "";
+        if (!/^https?:/i.test(url)) continue;
+        const folderTags: string[] = [];
+        let p: HTMLElement | null = a.parentElement;
+        while (p && p.tagName !== "BODY") {
+          if (p.tagName === "DL" && p.previousElementSibling?.tagName === "H3") {
+            const t = p.previousElementSibling.textContent?.trim();
+            if (t) folderTags.unshift(t.slice(0, 30));
+          }
+          p = p.parentElement;
+        }
+        const attrTags = (a.getAttribute("tags") || "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        items.push({
+          url,
+          title: (a.textContent || "").trim().slice(0, 300),
+          tags: [...folderTags, ...attrTags].slice(0, 8),
+        });
+        if (items.length >= 500) break outer;
+      }
+      if (!items.length) {
+        setMsg({ text: "✗ 文件里没有找到书签链接", ok: false });
+        return;
+      }
+      const res = await fetch("/api/links/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg({ text: "✗ " + (data.error || "导入失败"), ok: false });
+        return;
+      }
+      setMsg({
+        text: `✓ 导入完成：新增 ${data.inserted} 条${data.duplicates ? `，跳过重复 ${data.duplicates} 条` : ""}${data.invalid ? `，无效链接 ${data.invalid} 条` : ""}`,
+        ok: true,
+      });
+      await load();
+    } catch {
+      setMsg({ text: "✗ 导入失败，请确认是浏览器导出的书签 HTML 文件", ok: false });
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -135,6 +226,22 @@ export default function Dashboard() {
               aria-label="标签"
             />
           </div>
+          <div className="btn-row">
+            <button type="button" className="btn mini" onClick={() => importPickRef.current?.click()} disabled={importing}>
+              📥 导入浏览器书签
+            </button>
+            <input
+              ref={importPickRef}
+              type="file"
+              accept=".html,.htm"
+              hidden
+              onChange={(e) => {
+                handleImport(e.target.files?.[0] as File);
+                e.target.value = "";
+              }}
+            />
+            {importing && <span className="muted small">解析并导入中…（500 条以内，稍等）</span>}
+          </div>
           <p className={"msg" + (msg ? (msg.ok ? " ok" : " err") : "")} role="status" aria-live="polite">
             {msg?.text || ""}
           </p>
@@ -177,26 +284,77 @@ export default function Dashboard() {
           )}
           {filtered.map((l) => (
             <div key={l.id} className="link-card">
-              <a className="lc-title" href={l.url} target="_blank" rel="noopener noreferrer">
-                {l.title}
-              </a>
-              <span className="lc-host">{hostOf(l.url)}</span>
-              {l.description && <p className="lc-desc">{l.description}</p>}
-              {l.tags.length > 0 && (
-                <div className="lc-tags">
-                  {l.tags.map((t) => (
-                    <span key={t} role="button" onClick={() => setActiveTag(t)}>{t}</span>
-                  ))}
+              {editingId === l.id ? (
+                <div className="edit-form">
+                  <input
+                    type="text"
+                    value={editForm.title}
+                    onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
+                    aria-label="标题"
+                  />
+                  <input
+                    type="text"
+                    value={editForm.description}
+                    placeholder="描述（可选）"
+                    onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                    aria-label="描述"
+                  />
+                  <input
+                    type="text"
+                    value={editForm.tags}
+                    placeholder="标签（空格分隔）"
+                    onChange={(e) => setEditForm((f) => ({ ...f, tags: e.target.value }))}
+                    aria-label="标签"
+                  />
+                  <div className="btn-row">
+                    <button className="btn primary mini" onClick={() => saveEdit(l.id)}>保存</button>
+                    <button className="btn mini" onClick={() => setEditingId(null)}>取消</button>
+                  </div>
                 </div>
+              ) : (
+                <>
+                  <a className="lc-title" href={l.url} target="_blank" rel="noopener noreferrer">
+                    {!favBroken.has(l.id) && (
+                      <img
+                        className="lc-fav"
+                        src={"https://" + hostOf(l.url) + "/favicon.ico"}
+                        alt=""
+                        width={16}
+                        height={16}
+                        referrerPolicy="no-referrer"
+                        onError={() => setFavBroken((prev) => new Set(prev).add(l.id))}
+                      />
+                    )}
+                    {l.title}
+                  </a>
+                  <span className="lc-host">{hostOf(l.url)}</span>
+                  {l.description && <p className="lc-desc">{l.description}</p>}
+                  {l.tags.length > 0 && (
+                    <div className="lc-tags">
+                      {l.tags.map((t) => (
+                        <span key={t} role="button" onClick={() => setActiveTag(t)}>{t}</span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="lc-actions">
+                    <button
+                      className="lc-edit"
+                      onClick={() => startEdit(l)}
+                      aria-label={`编辑 ${l.title}`}
+                    >
+                      编辑
+                    </button>
+                    <button
+                      className="lc-del"
+                      onClick={() => del(l.id)}
+                      disabled={deletingId === l.id}
+                      aria-label={`删除 ${l.title}`}
+                    >
+                      {deletingId === l.id ? "删除中…" : "删除"}
+                    </button>
+                  </div>
+                </>
               )}
-              <button
-                className="lc-del"
-                onClick={() => del(l.id)}
-                disabled={deletingId === l.id}
-                aria-label={`删除 ${l.title}`}
-              >
-                {deletingId === l.id ? "删除中…" : "删除"}
-              </button>
             </div>
           ))}
         </section>
